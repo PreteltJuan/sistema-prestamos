@@ -1,0 +1,65 @@
+body{
+    font-family: 'Patua One', cursive;
+    margin: 0;
+}
+.nav{
+    border: 1px solid rgb(206, 212, 218);
+}
+
+h2{
+    font-size: 1.4rem;
+    text-transform: uppercase;
+}
+
+.nav-container{
+    width: 100vw;
+    height: 60px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+}
+
+.nav-container .image{
+    height: 100%;
+}
+.nav-container .titleApp span{
+    text-transform: uppercase;
+    font-size: 1.4rem;
+}
+
+.image img{
+    height: 100%;
+}
+
+.content{
+    width: 100vw;
+    display: flex;
+    justify-content: center;
+}
+
+.content-container{
+    width: 80vw;
+    display: flex;
+    justify-content: center;
+}
+
+
+.content-section{
+    height: 25%;
+    width: 30%;
+    margin: 20px 40px;
+}
+
+form{
+    display: flex;
+    flex-direction: column;
+
+}
+
+form label{
+    margin: 10px 0px;
+}
+
+form input{
+    margin: 20px 0px;
+}
