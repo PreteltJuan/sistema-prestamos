@@ -44,11 +44,19 @@ def obtenerPrestamos(request):
     form1 = PrestamoFormulario()
     prestamos = Prestamo.objects.all()
     return render(request, 'pages/home.html', { 'form1' : form1, 'prestamos':prestamos, 'prestamos_user':prestamos_user})
-def guardarId(request, id):
-    request.session["idUsuario"] = id
-    return HttpResponse('SD5A23D8')
-    #return HttpResponse('DE1ERU4D')
 
+
+    request.session["idUsuario"] = id
+    #return HttpResponse('SD5A23D8')
+    
+
+def obtenerUsuario(request, id):
+    try:
+        usuario = Usuario.objects.get(idUsuario = id)
+        return HttpResponse((usuario.nombre + " " +usuario.apellido))
+    except:
+        return HttpResponse("USUARIO NO ECONTRADO")
+        
 def hacerDevolucion(request, id):
     prestamo = Prestamo.objects.get(idPrestamo = id)
     prestamo.estado = True

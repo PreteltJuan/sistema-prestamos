@@ -1,88 +1,158 @@
+
 #include <ESP8266WiFi.h>
+#include <WiFiClient.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
 
-//Información de nuestro WIFI
-const char *ssid = "ssid";
-const char *password = "contraseña";
+#ifndef STASSID
+#define STASSID "TP-LINK_43CC"
+#define STAPSK  "37986681"
+#endif
 
-//Datos para una IP estática
-IPAddress ip(192,168,0,10);     
-IPAddress gateway(192,168,0,1);   
-IPAddress subnet(255,255,255,0); 
+const char* ssid = STASSID;
+const char* password = STAPSK;
+String lectura = "";
+ESP8266WebServer server(80);
 
+const int led = 13;
 
+void handleRoot() {
+  digitalWrite(led, 1);
+  server.send(200, "text/plain", "hello from esp8266!\r\n");
+  digitalWrite(led, 0);
+}
 
-//Puerto 80 TCP, este puerto se usa para la navegación web http
-WiFiServer server(80);
- 
-void setup() {
-  Serial.begin(115200); //Iniciamos comunicación serial
-  delay(10);
+void handleNotFound() {
+  digitalWrite(led, 1);
+  String message = "File Not Found\n\n";
+  message += "URI: ";
+  message += server.uri();
+  message += "\nMethod: ";
+  message += (server.method() == HTTP_GET) ? "GET" : "POST";
+  message += "\nArguments: ";
+  message += server.args();
+  message += "\n";
+  for (uint8_t i = 0; i < server.args(); i++) {
+    message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
+  }
+  server.send(404, "text/plain", message);
+  digitalWrite(led, 0);
+}
 
+void setup(void) {
+  pinMode(led, OUTPUT);
+  digitalWrite(led, 0);
+  Serial.begin(9600);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  Serial.println("");
 
-  Serial.println();
-  Serial.println();
-  Serial.print("Conectandose a ");
-  Serial.println(ssid);
-
-  WiFi.mode(WIFI_STA); 
-  WiFi.config(ip, gateway, subnet);
-  WiFi.begin(ssid, password); //Iniciamos conexión con el nombre y la contraseña del wifi que indicamos
-
-  //Mientras se conecta se imprimiran puntos
+  // Wait for connection
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-  
-  //Cuando se conecte lo imprimimos
   Serial.println("");
-  Serial.println("WiFi Conectado");
-   
-  // Iniciamos el esp como servidor web
-  server.begin();
-  Serial.println("Servidor iniciado");
- 
-  // Imprimimos la dirección IP
-  Serial.print("Usa esta URL para comunicar al ESP: ");
-  Serial.print("http://");
-  Serial.print(WiFi.localIP());
-  Serial.println("/");
+  Serial.print("Connected to ");
+  Serial.println(ssid);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  if (MDNS.begin("esp8266")) {
+    Serial.println("MDNS responder started");
+  }
+
+  server.on("/", handleRoot);
+
+  server.on("/getId", []() {
+    lectura = "";
+    while(!Serial.available()){}
+    while( Serial.available()){
+      lectura += char(Serial.read());
+      delay(20);
+    }
     
+    Serial.println(lectura);
+    
+    server.send(200, "text/plain", lectura);
+    
+  });
+
+  server.on("/enviarDatos", []() {
+    //Serial.println(lectura);
+    String datos = server.arg(0);
+    Serial.println(datos);
+    server.send(200, "text/plain", "recibido");
+    
+  });
+  server.onNotFound(handleNotFound);
+/*
+  /////////////////////////////////////////////////////////
+  // Hook examples
+
+  server.addHook([](const String & method, const String & url, WiFiClient * client, ESP8266WebServer::ContentTypeFunction contentType) {
+    (void)method;      // GET, PUT, ...
+    (void)url;         // example: /root/myfile.html
+    (void)client;      // the webserver tcp client connection
+    (void)contentType; // contentType(".html") => "text/html"
+    Serial.printf("A useless web hook has passed\n");
+    Serial.printf("(this hook is in 0x%08x area (401x=IRAM 402x=FLASH))\n", esp_get_program_counter());
+    return ESP8266WebServer::CLIENT_REQUEST_CAN_CONTINUE;
+  });
+
+  server.addHook([](const String&, const String & url, WiFiClient*, ESP8266WebServer::ContentTypeFunction) {
+    if (url.startsWith("/fail")) {
+      Serial.printf("An always failing web hook has been triggered\n");
+      return ESP8266WebServer::CLIENT_MUST_STOP;
+    }
+    return ESP8266WebServer::CLIENT_REQUEST_CAN_CONTINUE;
+  });
+
+  server.addHook([](const String&, const String & url, WiFiClient * client, ESP8266WebServer::ContentTypeFunction) {
+    if (url.startsWith("/dump")) {
+      Serial.printf("The dumper web hook is on the run\n");
+
+      // Here the request is not interpreted, so we cannot for sure
+      // swallow the exact amount matching the full request+content,
+      // hence the tcp connection cannot be handled anymore by the
+      // webserver.
+#ifdef STREAMSEND_API
+      // we are lucky
+      client->sendAll(Serial, 500);
+#else
+      auto last = millis();
+      while ((millis() - last) < 500) {
+        char buf[32];
+        size_t len = client->read((uint8_t*)buf, sizeof(buf));
+        if (len > 0) {
+          Serial.printf("(<%d> chars)", (int)len);
+          Serial.write(buf, len);
+          last = millis();
+        }
+      }
+#endif
+      // Two choices: return MUST STOP and webserver will close it
+      //                       (we already have the example with '/fail' hook)
+      // or                  IS GIVEN and webserver will forget it
+      // trying with IS GIVEN and storing it on a dumb WiFiClient.
+      // check the client connection: it should not immediately be closed
+      // (make another '/dump' one to close the first)
+      Serial.printf("\nTelling server to forget this connection\n");
+      static WiFiClient forgetme = *client; // stop previous one if present and transfer client refcounter
+      return ESP8266WebServer::CLIENT_IS_GIVEN;
+    }
+    return ESP8266WebServer::CLIENT_REQUEST_CAN_CONTINUE;
+  });
+
+  // Hook examples
+  /////////////////////////////////////////////////////////
+*/
+  server.begin();
+  Serial.println("HTTP server started");
 }
- 
-void loop() {
-  // El servidor siempre estará esperando a que se conecte un cliente
-  WiFiClient client = server.available();
-  if (!client) {
-    return;
-  }
-   
-  
-  Serial.println("Nuevo cliente"); //Cuando un cliente se conecte vamos a imprimir que se conectó
-  while(!client.available()){  //Esperamos a que el ciente mande una solicitud
-    delay(1);
-  }
-   
-  // Leemos la primer línea de la solicitud y la guardamos en la variable string request
-  String request = client.readStringUntil('\r');
-  Serial.println(request); //Imprimimos la solicitud
-  client.flush(); //Descartamos los datos que se han escrito en el cliente y no se han leído
-   
-  // Relacionamos la solicitud
-  if (request.indexOf("/enviarId") != -1){
-    //leemos código de la tarjeta
-    lectura
-  }
 
-
-  // Respuesta del servidor web
-  
-  client.println(lectura); // La respuesta empieza con una linea de estado  
-  client.stop();
-  delay(1);
-  Serial.println("Cliente desconectado"); //Imprimimos que terminó el proceso con el cliente desconectado
-  Serial.println("");
- 
+void loop(void) {
+  server.handleClient();
+  MDNS.update();
 }
 
- 
